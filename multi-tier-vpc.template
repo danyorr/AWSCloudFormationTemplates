@@ -98,7 +98,7 @@
       "Properties" : {
         "CidrBlock" : { "Fn::FindInMap" : [ "SubnetConfig", "VPC", "CIDR" ]},
         "Tags" : [
-          { "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } },
+          { "Key" : "Name", "Value" : "VPC_DEV" },
           { "Key" : "Network", "Value" : "Public" },
           { "Key" : "Role", "Value" : "VPC" }
         ]
@@ -122,7 +122,7 @@
       "Type" : "AWS::EC2::InternetGateway",
       "Properties" : {
         "Tags" : [
-          { "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } },
+          { "Key" : "Name", "Value" : "IGW_DEV" },
           { "Key" : "Network", "Value" : "Public" },
           { "Key" : "Role", "Value" : "Internet Gateway" }
         ]
@@ -142,7 +142,7 @@
       "Properties" : {
         "VpcId" : { "Ref" : "VPC" },
         "Tags" : [
-          { "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } },
+          { "Key" : "Name", "Value" : "DMZ_ROUTE_DEV" },
           { "Key" : "Network", "Value" : "Public" },
           { "Key" : "Role", "Value" : "DMZ Subnet" }
         ]
@@ -171,7 +171,7 @@
       "Properties" : {
         "VpcId" : { "Ref" : "VPC" },
         "Tags" : [
-          { "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } },
+          { "Key" : "Name", "Value" : "DMZ_NW_ACL_DEV" },
           { "Key" : "Network", "Value" : "Public" }
         ]
       }
@@ -250,13 +250,86 @@
       }
     },
 
+    "NATIPAddress" : {
+      "Type" : "AWS::EC2::EIP",
+      "Properties" : {
+        "Domain" : "vpc",
+        "InstanceId" : { "Ref" : "NATDevice" }
+      }
+    },
+
+    "NATDevice" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "InstanceType" : { "Ref" : "NATInstanceType" },
+        "SubnetId" : { "Ref" : "DMZSubnet" },
+        "SourceDestCheck" : "false",
+        "ImageId" : { "Fn::FindInMap" : [ "AWSNATAMI", { "Ref" : "AWS::Region" }, "AMI" ]},
+        "SecurityGroupIds" : [{ "Ref" : "NATSecurityGroup" }],
+        "Tags" : [
+          { "Key" : "Name", "Value" : "NAT_DEV" },
+          { "Key" : "Network", "Value" : "Public" },
+          { "Key" : "Role", "Value" : "NAT Host" }
+        ]
+      }
+    },
+
+    "NATSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable internal access to the NAT device",
+        "VpcId" : { "Ref" : "VPC" },
+        "SecurityGroupIngress" : [
+           { "IpProtocol" : "tcp", "FromPort" : "80",  "ToPort" : "80",  "CidrIp" : "0.0.0.0/0" } ,
+           { "IpProtocol" : "tcp", "FromPort" : "443", "ToPort" : "443", "CidrIp" : "0.0.0.0/0" } ],
+        "SecurityGroupEgress" : [
+           { "IpProtocol" : "tcp", "FromPort" : "80",  "ToPort" : "80",  "CidrIp" : "0.0.0.0/0" } ,
+           { "IpProtocol" : "tcp", "FromPort" : "443", "ToPort" : "443", "CidrIp" : "0.0.0.0/0" } ]
+      }
+    },
+
+    "BastionIPAddress" : {
+      "Type" : "AWS::EC2::EIP",
+      "Properties" : {
+        "Domain" : "vpc",
+        "InstanceId" : { "Ref" : "BastionHost" }
+      }
+    },
+
+    "BastionHost" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "InstanceType" : { "Ref" : "BastionInstanceType" },
+        "KeyName"  : { "Ref" : "KeyName" },
+        "SubnetId" : { "Ref" : "DMZSubnet" },
+        "ImageId"  : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" }, { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "BastionInstanceType" }, "Arch" ] } ] },
+        "SecurityGroupIds" : [{ "Ref" : "BastionSecurityGroup" }],
+        "Tags" : [
+          { "Key" : "Name", "Value" : "BASTION_DEV" },
+          { "Key" : "Network", "Value" : "Public" },
+          { "Key" : "Role", "Value" : "Bastion Host" }
+        ]
+      }
+    },
+
+    "BastionSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable access to the Bastion host",
+        "VpcId" : { "Ref" : "VPC" },
+        "SecurityGroupIngress" : [ { "IpProtocol" : "tcp", "FromPort" : "22",  "ToPort" : "22",  "CidrIp" : { "Ref" : "SSHFrom" }} ],
+        "SecurityGroupEgress"  : [ { "IpProtocol" : "tcp", "FromPort" : "22",  "ToPort" : "22",  "CidrIp" : { "Fn::FindInMap" : [ "SubnetConfig", "WEB", "CIDR" ]}}]
+      }
+    }
+  },
+
     "WebSubnet" : {
       "Type" : "AWS::EC2::Subnet",
       "Properties" : {
         "VpcId" : { "Ref" : "VPC" },
         "CidrBlock" : { "Fn::FindInMap" : [ "SubnetConfig", "WEB", "CIDR" ]},
         "Tags" : [
-          { "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } },
+          { "Key" : "Name", "Value" : "WEB_SUBNET_DEV" },
           { "Key" : "Network", "Value" : "Private" },
           { "Key" : "Role", "Value" : "Web Subnet" }
         ]
@@ -268,7 +341,7 @@
       "Properties" : {
         "VpcId" : { "Ref" : "VPC" },
         "Tags" : [
-          { "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } },
+          { "Key" : "Name", "Value" : "WEB_ROUTE_TABLE_DEV" },
           { "Key" : "Network", "Value" : "Private" },
           { "Key" : "Role", "Value" : "Web Subnet" }
         ]
@@ -297,7 +370,7 @@
       "Properties" : {
         "VpcId" : { "Ref" : "VPC" },
         "Tags" : [
-          { "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } },
+          { "Key" : "Name", "Value" : "WEB_NW_ACL_DEV" },
           { "Key" : "Network", "Value" : "Private" },
           { "Key" : "Role", "Value" : "Web Network ACL" }
         ]
@@ -337,69 +410,6 @@
         "NetworkAclId" : { "Ref" : "WebNetworkAcl" }
       }
     },
-
-    "NATIPAddress" : {
-      "Type" : "AWS::EC2::EIP",
-      "Properties" : {
-        "Domain" : "vpc",
-        "InstanceId" : { "Ref" : "NATDevice" }
-      }
-    },
-
-    "NATDevice" : {
-      "Type" : "AWS::EC2::Instance",
-      "Properties" : {
-        "InstanceType" : { "Ref" : "NATInstanceType" },
-        "SubnetId" : { "Ref" : "DMZSubnet" },
-        "SourceDestCheck" : "false",
-        "ImageId" : { "Fn::FindInMap" : [ "AWSNATAMI", { "Ref" : "AWS::Region" }, "AMI" ]},
-        "SecurityGroupIds" : [{ "Ref" : "NATSecurityGroup" }]
-      }
-    },
-
-    "NATSecurityGroup" : {
-      "Type" : "AWS::EC2::SecurityGroup",
-      "Properties" : {
-        "GroupDescription" : "Enable internal access to the NAT device",
-        "VpcId" : { "Ref" : "VPC" },
-        "SecurityGroupIngress" : [
-           { "IpProtocol" : "tcp", "FromPort" : "80",  "ToPort" : "80",  "CidrIp" : "0.0.0.0/0" } ,
-           { "IpProtocol" : "tcp", "FromPort" : "443", "ToPort" : "443", "CidrIp" : "0.0.0.0/0" } ],
-        "SecurityGroupEgress" : [
-           { "IpProtocol" : "tcp", "FromPort" : "80",  "ToPort" : "80",  "CidrIp" : "0.0.0.0/0" } ,
-           { "IpProtocol" : "tcp", "FromPort" : "443", "ToPort" : "443", "CidrIp" : "0.0.0.0/0" } ]
-      }
-    },
-
-    "BastionIPAddress" : {
-      "Type" : "AWS::EC2::EIP",
-      "Properties" : {
-        "Domain" : "vpc",
-        "InstanceId" : { "Ref" : "BastionHost" }
-      }
-    },
-
-    "BastionHost" : {
-      "Type" : "AWS::EC2::Instance",
-      "Properties" : {
-        "InstanceType" : { "Ref" : "BastionInstanceType" },
-        "KeyName"  : { "Ref" : "KeyName" },
-        "SubnetId" : { "Ref" : "DMZSubnet" },
-        "ImageId"  : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" }, { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "BastionInstanceType" }, "Arch" ] } ] },
-        "SecurityGroupIds" : [{ "Ref" : "BastionSecurityGroup" }]
-      }
-    },
-
-    "BastionSecurityGroup" : {
-      "Type" : "AWS::EC2::SecurityGroup",
-      "Properties" : {
-        "GroupDescription" : "Enable access to the Bastion host",
-        "VpcId" : { "Ref" : "VPC" },
-        "SecurityGroupIngress" : [ { "IpProtocol" : "tcp", "FromPort" : "22",  "ToPort" : "22",  "CidrIp" : { "Ref" : "SSHFrom" }} ],
-        "SecurityGroupEgress"  : [ { "IpProtocol" : "tcp", "FromPort" : "22",  "ToPort" : "22",  "CidrIp" : { "Fn::FindInMap" : [ "SubnetConfig", "WEB", "CIDR" ]}}]
-      }
-    }
-  },
 
   "Outputs" : {
     "VPCId" : {
